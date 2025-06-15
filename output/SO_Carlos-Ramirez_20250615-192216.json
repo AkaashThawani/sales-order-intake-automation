@@ -1,0 +1,35 @@
+{
+    "sales_order_summary": {
+        "customer_name": "Carlos Ramirez",
+        "delivery_address": "Av. Insurgentes Sur 3500, Mexico City",
+        "requested_delivery_date": "June 22, 2025",
+        "notes": "If there are better alternatives for any item, I\u2019m all ears.",
+        "generation_timestamp_utc": "2025-06-15T23:22:16.439287"
+    },
+    "line_items": [
+        {
+            "sku": "CST-0482",
+            "product_name": "Console VALLSUND 240",
+            "quantity": 3,
+            "unit_price": 476.74,
+            "total_price": 1430.22
+        }
+    ],
+    "issues_for_review": [
+        {
+            "requested_item": "Bar FJ\u00c4RMARK 344",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 3 is below the Minimum Order Quantity of 10."
+        },
+        {
+            "requested_item": "Outdoor VALLHOLM 134",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 3 is below the Minimum Order Quantity of 10."
+        },
+        {
+            "requested_item": "Console LUNDBERG 220",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 7 is below the Minimum Order Quantity of 10."
+        }
+    ]
+}

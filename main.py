@@ -54,7 +54,7 @@ def run_order_intake_pipeline(email_filepath: str):
         print("✍️  Starting PDF generation...")
         fill_sales_order_pdf(
             json_path=json_filepath,
-            template_path="sales_order_full_form.pdf"
+            template_path="sales_order_form_full.pdf"
         )
     
     print(f"--- ✅ Pipeline finished for Email: '{os.path.basename(email_filepath)}' ---")
