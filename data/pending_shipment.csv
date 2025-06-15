@@ -1,0 +1,3 @@
+OrderID,ProductName,Quantity,Destination,Status
+ORD-101,Blue Widget,25,TechCorp,PENDING
+ORD-102,Small Steel Screw,500,InnovateInc,PENDING

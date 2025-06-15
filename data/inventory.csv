@@ -1,0 +1,7 @@
+SKU,ProductName,CurrentStock,Warehouse,MinOrderQty
+WID-BL-01,Blue Widget,150,North-A,50
+WID-RD-01,Red Widget,0,North-A,50
+GAD-GR-LG,Large Green Gadget,45,South-B,20
+SCR-STL-SM,Small Steel Screw,12500,North-A,1000
+DEV-YL-01,Yellow Device,10,South-B,25
+BRK-HV-01,Heavy-Duty Bracket,0,South-B,100
