@@ -1,4 +1,0 @@
-OrderID,ProductName,Quantity,Destination,Status
-ORD-101,Blue Widget,25,"123 Innovation Drive, Techville, CA 90210",PENDING
-ORD-102,Small Steel Screw,500,"4500 Global Tek Parkway, Suite 200, Metro City, NY 10001",PENDING
-ORD-103,Large Wood Panel,15,"123 Innovation Dr, Techville, CA 90210",PENDING

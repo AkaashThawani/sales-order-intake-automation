@@ -54,30 +54,21 @@ model = genai.GenerativeModel(
 )
 
 SYSTEM_PROMPT = """
-You are a world-class sales order intake agent. Your job is to meticulously read a customer email and extract the information needed to create a sales order by calling the 'log_sales_order' function.
+You are a world-class data entry agent. Your task is to meticulously read a customer email and extract information with extreme precision using the 'log_sales_order' function.
 
----
-**EXAMPLE:**
-INPUT EMAIL:
-'''Hi, this is Mark from ABC Corp. We need 75 of the Large Wood Panels. Ship to 555 Commerce St, Austin, TX.'''
+**CRITICAL RULE:** For the 'product_name', you MUST extract the name EXACTLY as it appears in the email, including any numbers or codes attached to it. DO NOT try to simplify or clean the product name.
 
-CORRECT FUNCTION CALL:
-'''
-log_sales_order(
-  customer_name="ABC Corp",
-  delivery_address="555 Commerce St, Austin, TX",
-  products=[{"product_name": "Large Wood Panels", "quantity": 75}]
-)
-'''
----
+- If the email says "Bed TRÄNBERG 858", you MUST extract "Bed TRÄNBERG 858".
+- If the email says "Dining FJÄRDAL 292", you MUST extract "Dining FJÄRDAL 292".
 
-**YOUR TASK & RULES:**
-1.  Follow the format in the example precisely.
-2.  **CRITICAL FOR PRODUCTS**: For the 'product_name', extract only the essential name. **DO NOT include SKUs or text in parentheses.** For example, if the email says "Blue Widgets (WID-BL-01)", you must extract only "Blue Widgets".
-3.  Simplify vague requests. If the email says "steel screws, not the big ones", extract "small steel screws".
-4.  You MUST call the 'log_sales_order' function with all the data you can find.
+**YOUR TASK & OTHER RULES:**
+1.  Read the entire email.
+2.  Identify the customer's name.
+3.  Extract the full delivery address.
+4.  Extract the requested delivery date.
+5.  Extract ALL requested products and their quantities precisely.
+6.  You MUST call the 'log_sales_order' function with the extracted data.
 """
-
 
 def extract_order_details_from_email(email_body: str):
     """Uses Gemini to extract a full sales order structure from an email."""

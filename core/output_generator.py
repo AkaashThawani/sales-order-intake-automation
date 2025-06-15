@@ -2,15 +2,10 @@ import json
 import re
 from datetime import datetime
 import os
-import pandas as pd # <-- Import pandas here
+import pandas as pd
 
 def create_sales_order_json(processed_order: dict, output_folder="output"):
-    """
-    Takes the fully processed order data and generates a structured JSON file.
-    This version safely handles NaN values from pandas.
-    """
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    if not os.path.exists(output_folder): os.makedirs(output_folder)
 
     customer_name = processed_order.get("customer_name", "UnknownCustomer")
     safe_customer_name = re.sub(r'[^a-zA-Z0-9_-]', '', str(customer_name).replace(' ', '-'))
@@ -19,47 +14,41 @@ def create_sales_order_json(processed_order: dict, output_folder="output"):
     filename = f"SO_{safe_customer_name}_{timestamp}.json"
     filepath = os.path.join(output_folder, filename)
 
-    # Final JSON structure
     output_data = {
-        "sales_order_summary": {
-            "customer_name": processed_order.get("customer_name"),
-            "delivery_address": processed_order.get("delivery_address"),
-            "requested_delivery_date": processed_order.get("delivery_date"),
-            "notes": processed_order.get("customer_notes"),
-            "generation_timestamp_utc": datetime.utcnow().isoformat()
-        },
-        "consolidation_suggestions": processed_order.get("consolidation_suggestions", []),
+        "sales_order_summary": processed_order.get("sales_order_summary", processed_order),
         "line_items": [],
         "issues_for_review": []
     }
+    
+    # Restructure the sales_order_summary to ensure it's clean
+    summary = processed_order
+    output_data["sales_order_summary"] = {
+        "customer_name": summary.get("customer_name"),
+        "delivery_address": summary.get("delivery_address"),
+        "requested_delivery_date": summary.get("delivery_date"),
+        "notes": summary.get("customer_notes"),
+        "generation_timestamp_utc": datetime.utcnow().isoformat()
+    }
+
 
     for item in processed_order.get("processed_line_items", []):
-        if item["status"] == "VALIDATED":
-            product = item["product_details"]
-            
-            # --- THIS IS THE FIX ---
-            # Safely get quantity and price, and check for NaN values.
+        if item.get("status") == "VALIDATED":
+            details = item.get("product_details", {})
             quantity = item.get("requested_quantity", 0)
-            unit_price = product.get("Price")
+            unit_price = pd.to_numeric(details.get("Price"), errors='coerce')
             total_price = None
 
-            # Check if unit_price is NaN, and if so, convert it to None for JSON compatibility.
-            if pd.isna(unit_price):
-                unit_price = None
-
-            # Only calculate total_price if unit_price is a valid number.
-            if isinstance(unit_price, (int, float)):
+            if pd.notna(unit_price):
                 total_price = round(quantity * unit_price, 2)
-            # --- END OF FIX ---
 
             output_data["line_items"].append({
-                "sku": product.get("SKU"),
-                "product_name": product.get("Name"),
+                "sku": details.get("Product_Code"),
+                "product_name": details.get("Product_Name"),
                 "quantity": quantity,
-                "unit_price": unit_price,
+                "unit_price": unit_price if pd.notna(unit_price) else None,
                 "total_price": total_price
             })
-        else: # Any other status is an issue
+        else:
             output_data["issues_for_review"].append({
                 "requested_item": item.get("requested_name"),
                 "status": item.get("status"),
@@ -68,7 +57,7 @@ def create_sales_order_json(processed_order: dict, output_folder="output"):
             
     try:
         with open(filepath, 'w') as f:
-            json.dump(output_data, f, indent=4)
+            json.dump(output_data, f, indent=4, default=str) # Use default=str to handle any rogue numpy types
         print(f"\n✅ Successfully created sales order file: {filepath}")
         return filepath
     except Exception as e:
