@@ -5,11 +5,14 @@ This Python application provides an end-to-end solution for automating sales ord
 ## Key Features
 
 - **AI-Powered Data Extraction**: Leverages Google Gemini to reliably extract key order details from raw email text, including customer name, address, delivery dates, product names, quantities, and general notes.
-- **Fuzzy Product Matching**: Intelligently matches customer requests (e.g., "small steel screws") to official product names in the catalog, handling minor typos and ambiguity.
-- **Business Rule Validation**: Automatically checks each requested item against critical business rules like product existence, ambiguity (multiple matches), and Minimum Order Quantity (MOQ).
-- **Order Consolidation**: Checks the new order's delivery address against a list of pending shipments to flag potential cost-saving consolidation opportunities.
-- **Structured JSON Output**: Generates a clean JSON file for each order, separating validated `line_items` from `issues_for_review` that require human attention.
-- **Automated PDF Generation**: Takes the validated order data and automatically fills out a pre-defined PDF sales order template, creating a ready-to-use document.
+- **Intelligent Product Matching**: Uses a two-tiered search strategy. It first attempts a high-confidence exact match and then uses a fuzzy matching algorithm (`thefuzz`) as a fallback to handle typos and ambiguity.
+- **Comprehensive Business Rule Validation**: Automatically checks each requested item against critical business rules:
+  - **SKU Existence**: Flags items that are not found in the catalog.
+  - **Ambiguity Check**: Flags requests that match multiple products, preventing incorrect orders.
+  - **Minimum Order Quantity (MOQ)**: Flags items where the requested quantity is below the required MOQ.
+  - **Inventory Availability**: Flags items that have insufficient stock.
+- **Structured Data Output**: Generates a clean JSON file for each order, separating fully validated `line_items` from `issues_for_review` that require human attention.
+- **Automated PDF Generation**: Takes the processed order data and automatically fills out a pre-defined PDF sales order template, creating a ready-to-use document. The PDF generation is cross-platform and works on Windows, macOS, and Linux.
 
 ## Project Structure
 
@@ -19,21 +22,21 @@ Hackathon/
 ├── .env                  # For API keys and secrets (not committed)
 ├── .gitignore            # Specifies files for Git to ignore
 ├── requirements.txt      # Project dependencies
-├── sales_order_template.pdf # The blank PDF form to be filled
+├── sales_order_form_full.pdf # The blank PDF form to be filled
 ├── README.md             # This file
 │
 ├── data/
-│   ├── inventory.csv     # Product catalog
-│   └── pending_shipments.csv # List of unshipped orders
+│   └── Product Catalog.csv # Master product catalog
 │
 ├── test_data/
-│   └── email_samples.py  # A collection of test emails
+│   ├── sample_email_1.txt
+│   ├── sample_email_2.txt
+│   └── ... (etc.)
 │
 ├── core/
 │   ├── llm_extractor.py      # Handles all interaction with the Gemini AI
 │   ├── inventory_manager.py  # Manages loading and searching the product catalog
 │   ├── decision_engine.py    # Applies business rules and validation
-│   ├── consolidation_checker.py # Checks for order merging opportunities
 │   ├── output_generator.py   # Creates the intermediate JSON output file
 │   └── pdf_writer.py         # Fills the PDF sales order form
 │
@@ -46,7 +49,7 @@ Hackathon/
     - Ensure all the project files are located inside a folder named `Hackathon`.
 
 2.  **Navigate to the Project Directory**
-    - Open your terminal and navigate into the project folder.
+    - Open your terminal (e.g., PowerShell, Command Prompt) and navigate into the project folder.
     ```bash
     cd path/to/your/Hackathon
     ```
@@ -78,17 +81,17 @@ Hackathon/
 
 ## How to Run
 
-1.  **Select a Test Case:** Open `main.py` and change the `selected_email` variable at the bottom of the file to any key from `email_samples.py` (e.g., `"email_1"`, `"email_2"`).
+1.  **Select Test Cases:** Open `main.py` and modify the `email_files_to_test` list at the bottom of the file to include the emails you want to process.
 
 2.  **Execute the Script from the Terminal:**
     ```bash
     py main.py
     ```
 
-3.  **Check the Output:** A JSON file and a filled-out PDF sales order will be generated in the `output/` directory.
+3.  **Check the Output:** For each email processed, a JSON file and a filled-out PDF sales order will be generated in the `output/` directory.
 
 ## Future Improvements
 
-- **Web Interface**: Build a simple web UI using Flask or Streamlit to upload emails or paste text and see the generated PDF.
-- **Database Integration**: Replace the CSV files with a proper database (like SQLite or PostgreSQL) for more robust inventory and order management.
-- **Email Integration**: Add a module to connect directly to an email inbox (via IMAP) to process new orders automatically.
+- **Web Interface**: Build a simple web UI using Flask or Streamlit to upload emails or paste text and see the generated PDF in the browser.
+- **Database Integration**: Replace the `Product Catalog.csv` file with a proper database (like SQLite or PostgreSQL) for more robust inventory and order management.
+- **Direct Email Integration**: Add a module to connect to an email inbox (via IMAP) to process new orders automatically as they arrive.
