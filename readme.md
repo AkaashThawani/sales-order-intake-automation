@@ -21,12 +21,11 @@ This Python application automates the process of handling sales orders received 
 ## Project Structure
 
 ```
-logistics-ai-app/
+Hackathon/
 │
 ├── .env                  # For API keys and secrets (not committed)
 ├── .gitignore            # Specifies files for Git to ignore
 ├── requirements.txt      # Project dependencies
-├── sales_order_template.pdf # (For future PDF generation feature)
 ├── README.md             # This file
 │
 ├── data/
@@ -48,13 +47,16 @@ logistics-ai-app/
 
 ## Setup and Installation
 
-1.  **Clone the Repository**
+1.  **Get the Project Files**
+    - Ensure all the project files are located inside a folder named `Hackathon`.
+
+2.  **Navigate to the Project Directory**
+    - Open your terminal (e.g., PowerShell, Command Prompt) and navigate into the project folder.
     ```bash
-    git clone <your-repo-url>
-    cd logistics-ai-app
+    cd path/to/your/Hackathon
     ```
 
-2.  **Create and Activate a Virtual Environment**
+3.  **Create and Activate a Virtual Environment**
     - **Windows:**
       ```powershell
       py -m venv venv
@@ -66,23 +68,24 @@ logistics-ai-app/
       source venv/bin/activate
       ```
 
-3.  **Install Dependencies**
+4.  **Install Dependencies**
+    - With your virtual environment active, run:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Set Up Environment Variables**
-    - Create a file named `.env` in the root directory.
-    - Copy the contents of `.env.example` (if you have one) or add your API key directly:
+5.  **Set Up Environment Variables**
+    - In the `Hackathon` root directory, create a new file named `.env`.
+    - Add your Google Gemini API key to this file:
       ```
       GEMINI_API_KEY="YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE"
       ```
 
 ## How to Run
 
-1.  **Select a Test Case:** Open `main.py` and change the `selected_email` variable at the bottom to any key from `email_samples.py` (e.g., `"email_1"`, `"email_2"`).
+1.  **Select a Test Case:** Open `main.py` and change the `selected_email` variable at the bottom of the file to any key from `email_samples.py` (e.g., `"email_1"`, `"email_2"`).
 
-2.  **Execute the Script:**
+2.  **Execute the Script from the Terminal:**
     ```bash
     py main.py
     ```
