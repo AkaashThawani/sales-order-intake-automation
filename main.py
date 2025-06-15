@@ -3,7 +3,9 @@ from core.inventory_manager import load_data
 from core.decision_engine import process_and_validate_order
 from core.consolidation_checker import find_consolidation_opportunities
 from core.output_generator import create_sales_order_json
+from core.pdf_writer import fill_sales_order_pdf
 from test_data.email_samples import CUSTOMER_EMAILS
+
 
 def run_order_intake_pipeline(email_key: str):
     """
@@ -32,21 +34,32 @@ def run_order_intake_pipeline(email_key: str):
     if inventory_df is None or pending_shipments_df is None:
         print("--- Pipeline halted: A required data file could not be loaded. ---")
         return
-    
+
     # --- Step 4: Validate and Process Order ---
     final_order_data = process_and_validate_order(extracted_data, inventory_df)
     print("⚖️ Order validation complete.")
-    
+
     # --- Step 5: Check for Consolidation Opportunities ---
     consolidation_suggestions = find_consolidation_opportunities(
         new_order_address=final_order_data.get("delivery_address"),
         pending_shipments_df=pending_shipments_df
     )
     if consolidation_suggestions:
-        print(f"🚚 Found {len(consolidation_suggestions)} potential consolidation(s)!")
+        print(
+            f"🚚 Found {len(consolidation_suggestions)} potential consolidation(s)!")
         final_order_data["consolidation_suggestions"] = consolidation_suggestions
+
+    json_filepath = create_sales_order_json(final_order_data)
     
-    # --- Step 6: Generate Final JSON Output ---
+    # --- Step 6: Fill the PDF form using the generated JSON ---
+    if json_filepath:
+        print("✍️  Starting PDF generation...")
+        fill_sales_order_pdf(
+            json_path=json_filepath, 
+            template_path="sales_order_template.pdf" # <-- Name of your PDF
+        )
+    
+    # --- Step 7: Generate Final JSON Output ---
     create_sales_order_json(final_order_data)
     
     print(f"--- ✅ Pipeline finished for Email: '{email_key}' ---")

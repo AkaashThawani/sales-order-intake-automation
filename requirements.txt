@@ -3,3 +3,4 @@ imap-tools
 pandas
 python-dotenv
 thefuzz
+PyMuPDF
