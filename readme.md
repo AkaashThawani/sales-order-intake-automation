@@ -1,22 +1,15 @@
-# AI-Powered Sales Order Intake
+# AI-Powered Sales Order Intake Automation
 
-This Python application automates the process of handling sales orders received via email. It uses a Large Language Model (Google Gemini) to parse unstructured email text, extract key order details, validate them against a product catalog, and generate a structured JSON output file ready for the next step in a business workflow.
+This Python application provides an end-to-end solution for automating sales order intake from emails. It uses a Large Language Model (Google Gemini) to parse unstructured email text, validates the request against a product catalog and business rules, and automatically generates a filled-out PDF sales order form.
 
 ## Key Features
 
-- **AI-Powered Data Extraction**: Leverages Google Gemini's Function Calling to reliably extract the following from raw email text:
-  - Customer Name & Company
-  - Delivery Address
-  - Requested Delivery Date
-  - Product Names & Quantities
-  - General Customer Notes
-- **Fuzzy Product Matching**: Uses the `thefuzz` library to intelligently match customer requests (e.g., "small steel screws") to official product names in the catalog, handling minor typos and ambiguity.
-- **Business Rule Validation**: Automatically checks each requested item against critical business rules:
-  - **Product Existence**: Flags items that are not found in the catalog.
-  - **Ambiguity Check**: Flags requests that match multiple products, preventing incorrect orders.
-  - **Minimum Order Quantity (MOQ)**: Flags items where the requested quantity is below the required MOQ.
-- **Order Consolidation Suggestions**: Checks the new order's delivery address against a list of pending shipments to flag potential cost-saving consolidation opportunities.
-- **Structured JSON Output**: Generates a clean, machine-readable JSON file for each order, separating validated `line_items` from `issues_for_review` that require human attention.
+- **AI-Powered Data Extraction**: Leverages Google Gemini to reliably extract key order details from raw email text, including customer name, address, delivery dates, product names, quantities, and general notes.
+- **Fuzzy Product Matching**: Intelligently matches customer requests (e.g., "small steel screws") to official product names in the catalog, handling minor typos and ambiguity.
+- **Business Rule Validation**: Automatically checks each requested item against critical business rules like product existence, ambiguity (multiple matches), and Minimum Order Quantity (MOQ).
+- **Order Consolidation**: Checks the new order's delivery address against a list of pending shipments to flag potential cost-saving consolidation opportunities.
+- **Structured JSON Output**: Generates a clean JSON file for each order, separating validated `line_items` from `issues_for_review` that require human attention.
+- **Automated PDF Generation**: Takes the validated order data and automatically fills out a pre-defined PDF sales order template, creating a ready-to-use document.
 
 ## Project Structure
 
@@ -26,6 +19,7 @@ Hackathon/
 ├── .env                  # For API keys and secrets (not committed)
 ├── .gitignore            # Specifies files for Git to ignore
 ├── requirements.txt      # Project dependencies
+├── sales_order_template.pdf # The blank PDF form to be filled
 ├── README.md             # This file
 │
 ├── data/
@@ -40,9 +34,10 @@ Hackathon/
 │   ├── inventory_manager.py  # Manages loading and searching the product catalog
 │   ├── decision_engine.py    # Applies business rules and validation
 │   ├── consolidation_checker.py # Checks for order merging opportunities
-│   └── output_generator.py   # Creates the final JSON output file
+│   ├── output_generator.py   # Creates the intermediate JSON output file
+│   └── pdf_writer.py         # Fills the PDF sales order form
 │
-└── main.py               # Main script to run the pipeline
+└── main.py               # Main script to run the full pipeline
 ```
 
 ## Setup and Installation
@@ -51,7 +46,7 @@ Hackathon/
     - Ensure all the project files are located inside a folder named `Hackathon`.
 
 2.  **Navigate to the Project Directory**
-    - Open your terminal (e.g., PowerShell, Command Prompt) and navigate into the project folder.
+    - Open your terminal and navigate into the project folder.
     ```bash
     cd path/to/your/Hackathon
     ```
@@ -90,8 +85,10 @@ Hackathon/
     py main.py
     ```
 
-3.  **Check the Output:** A new JSON file will be generated in the `output/` directory with the processed order details.
+3.  **Check the Output:** A JSON file and a filled-out PDF sales order will be generated in the `output/` directory.
 
-## Next Steps
+## Future Improvements
 
-- [ ] Implement the "Bonus Round" feature: a PDF Writing Agent to automatically fill a `sales_order_template.pdf` using the generated JSON data.
+- **Web Interface**: Build a simple web UI using Flask or Streamlit to upload emails or paste text and see the generated PDF.
+- **Database Integration**: Replace the CSV files with a proper database (like SQLite or PostgreSQL) for more robust inventory and order management.
+- **Email Integration**: Add a module to connect directly to an email inbox (via IMAP) to process new orders automatically.

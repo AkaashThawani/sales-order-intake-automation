@@ -4,6 +4,7 @@ from core.decision_engine import process_and_validate_order
 from core.consolidation_checker import find_consolidation_opportunities
 from core.output_generator import create_sales_order_json
 from core.pdf_writer import fill_sales_order_pdf
+
 from test_data.email_samples import CUSTOMER_EMAILS
 
 
@@ -49,18 +50,18 @@ def run_order_intake_pipeline(email_key: str):
             f"🚚 Found {len(consolidation_suggestions)} potential consolidation(s)!")
         final_order_data["consolidation_suggestions"] = consolidation_suggestions
 
+    # --- Step 6: Generate Final JSON Output ---
     json_filepath = create_sales_order_json(final_order_data)
     
-    # --- Step 6: Fill the PDF form using the generated JSON ---
+    # --- Step 7: Fill the PDF form using the generated JSON ---
     if json_filepath:
         print("✍️  Starting PDF generation...")
         fill_sales_order_pdf(
             json_path=json_filepath, 
-            template_path="sales_order_template.pdf" # <-- Name of your PDF
+            template_path="sales_order_template.pdf"
         )
     
-    # --- Step 7: Generate Final JSON Output ---
-    create_sales_order_json(final_order_data)
+    # The redundant call to create_sales_order_json has been REMOVED.
     
     print(f"--- ✅ Pipeline finished for Email: '{email_key}' ---")
 
