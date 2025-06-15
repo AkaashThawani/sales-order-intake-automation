@@ -1,77 +1,80 @@
-EMAIL_SAMPLES = {
-    "scenario_1_simple_and_vague": """
-    From: Alex <alex@clientcorp.com>
-    To: Logistics Team <logistics@mycompany.com>
-    Subject: Quick question
+# A collection of 5 realistic customer emails for testing the new system.
+# This file no longer contains any default quantities.
 
-    Hey team,
+CUSTOMER_EMAILS = {
+    "email_1": {
+        "sender": "j.doe@innovate-llc.com",
+        "subject": "Order for Project Alpha",
+        "body": """
+        Hi team,
 
-    Can you check on our usual order? We need more of the blue things. Probably the standard amount.
+        Please process an order for Innovate LLC. We need 150 of the Blue Widgets (WID-BL-01).
+        
+        We also need 25 of the large wood panels for the new construction.
 
-    Thanks,
-    Alex
-    """,
+        Please ship to our main warehouse at: 123 Innovation Drive, Techville, CA 90210. We need it there by November 10th, 2023.
 
-    "scenario_2_multi_product_and_uncertainty": """
-    From: Sarah <sarah@innovate.io>
-    To: Logistics Team <logistics@mycompany.com>
-    Subject: Following up
+        Thanks,
+        John Doe
+        """
+    },
+    "email_2": {
+        "sender": "susan.b@global-tek.net",
+        "subject": "Urgent Request",
+        "body": """
+        Hello,
 
-    Hi there,
+        This is Susan from Global Tek. We need just 5 boxes of the small steel construction screws. I know it's a small order but we're in a pinch.
+        
+        Also, please add 20 Large Green Gadgets to the order.
 
-    Following up on my call with Bob. He mentioned we need to restock.
+        Delivery address is our HQ: 4500 Global Tek Parkway, Suite 200, Metro City, NY 10001. No rush on the delivery date, whenever is fine.
 
-    I think he said we're low on the big green gadgets, maybe get another 40 or so? Also, that last batch of yellow devices went fast, we probably should get more. Let's do a full re-order on those.
+        - Susan
+        """
+    },
+    "email_3": {
+        "sender": "andrews-workshop@email.com",
+        "subject": "Question about screws",
+        "body": """
+        hey can you help me out? i need some steel screws for a project. not the big ones, the other kind. maybe 15 boxes? send them to Andrew's Workshop, 15 Main St, Smalltown, TX 75001. 
 
-    Let me know.
+        cheers
+        andy
+        """
+    },
+    "email_4": {
+        "sender": "carla.p@precisionparts.co",
+        "subject": "New Order & a question",
+        "body": """
+        Good morning,
 
-    -S
-    """,
+        Please place an order for Carla at Precision Parts.
+        
+        We need 500 of the standard red widgets.
 
-    "scenario_3_email_chain_with_corrections": """
-    From: Logistics Team <logistics@mycompany.com>
-    To: Mark <mark@techsolutions.com>
-    Subject: Re: Urgent Order
+        Also, do you guys stock Titanium Plates? I don't see them on your site but thought I'd ask. If so, we'd take 100.
 
-    Hi Mark, confirming your request for 100 Red Widgets.
+        Please let us know. Delivery is for our new site: 88 Precision Way, Industry Park, IL 60601, preferably before the end of the month.
+        
+        Regards,
+        Carla
+        """
+    },
+    "email_5": {
+        "sender": "mike@fastmovers.logistics",
+        "subject": "Re: Your Order",
+        "body": """
+        Hi there, thanks for the quick reply.
 
-    > From: Mark <mark@techsolutions.com>
-    > To: Logistics Team <logistics@mycompany.com>
-    >
-    > We need widgets URGENTLY. The red ones. Get me a hundred.
+        Okay, let's go with 30 of the Yellow Devices.
 
-    ---
-    From: Mark <mark@techsolutions.com>
-    To: Logistics Team <logistics@mycompany.com>
-    Subject: Re: Re: Urgent Order
+        Wait, my manager just told me to change that. Sorry! Please make it 25 of the Yellow Devices instead. And can you add a dozen of the 2m USB cables to that?
 
-    Whoops, my mistake. I meant the BLUE widgets. Not the red ones. Still need 100. Sorry for the confusion!
+        Deliver to Fast Movers Depot, 42 Desert Road, Phoenix, AZ 85001. Needs to be here EOD Friday.
 
-    Please confirm.
-    Mark
-    """,
-    
-    "scenario_4_no_quantities_and_new_item": """
-    From: Jenny <jenny@globaltraders.net>
-    To: Logistics Team <logistics@mycompany.com>
-    Subject: stock levels
-
-    Hi,
-
-    Can you do a stock check for me? I need to know what we have for the small steel screws. Also, we're totally out of the red widgets, we need to fix that.
-
-    Also, I heard a rumor we might start stocking 'heavy-duty brackets'. Is that true? If so, get me a quote for a starting inventory of 200.
-
-    Jenny
-    """
+        Thanks for your flexibility!
+        Mike
+        """
+    }
 }
-
-# The LLM will need to infer "standard amount" or "full re-order".
-# For this, we can define what those mean in our system.
-# The LLM prompt can be told to use these defaults if a quantity is missing.
-# DEFAULT_QUANTITIES = {
-#     "standard amount": 100,
-#     "full re-order": 50,
-#     "fix that": 50, # For "we're totally out..., we need to fix that"
-#     "get more": 25
-# }

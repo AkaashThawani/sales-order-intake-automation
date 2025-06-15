@@ -2,3 +2,4 @@ google-generativeai
 imap-tools
 pandas
 python-dotenv
+thefuzz
