@@ -1,53 +1,55 @@
 import pandas as pd
 from thefuzz import process, fuzz
+import re
 
 def load_data(path: str):
-    """Loads data from a CSV file, handling potential errors."""
+    """Loads data from a CSV file, ensuring all columns are read as strings to prevent type errors."""
     try:
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype=str)
     except FileNotFoundError:
         print(f"ERROR: Data file not found at path: {path}")
         return None
 
-def find_product_matches(requested_name: str, inventory_df: pd.DataFrame, confidence_threshold=85):
+def find_product_matches(requested_name: str, inventory_df: pd.DataFrame, confidence_threshold=85): # Reset threshold to 85
     """
     Finds potential product matches from the inventory using fuzzy string matching.
-    It checks both the ProductName and Description for better results.
-
-    Args:
-        requested_name (str): The product name from the email.
-        inventory_df (pd.DataFrame): The inventory catalog.
-        confidence_threshold (int): The minimum confidence score (0-100) to consider a match.
-
-    Returns:
-        A list of dictionary objects, where each dictionary is a potential match.
+    This version is robust and includes definitive debugging prints.
     """
-    if inventory_df is None:
+    if inventory_df is None or requested_name is None:
         return []
 
-    # Create a combined search string for each product
-    inventory_df['SearchString'] = inventory_df['ProductName'] + " " + inventory_df['Description']
+    # 1. Clean the requested name from the AI
+    clean_requested_name = re.sub(r'\s*\([^)]*\)', '', requested_name).strip().lower()
+
+    # 2. Prepare the search space from the inventory
+    if 'SearchString' not in inventory_df.columns:
+        product_names = inventory_df['ProductName'].astype(str).str.lower()
+        descriptions = inventory_df['Description'].astype(str).fillna('').str.lower()
+        inventory_df['SearchString'] = product_names + " " + descriptions
     
-    # Use thefuzz to find the best matches from the 'SearchString' column
-    # We use a lenient scorer like partial_ratio to find "steel screws" in "Box of 1000, 1-inch steel screws"
+    # 3. Perform the fuzzy search using a more advanced scorer
     matches = process.extractBests(
-        requested_name,
+        clean_requested_name,
         inventory_df['SearchString'],
-        scorer=fuzz.partial_ratio,
-        score_cutoff=confidence_threshold,
-        limit=5 # Limit to the top 5 potential matches
+        scorer=fuzz.WRatio,
+        score_cutoff=confidence_threshold, # Using 85 as a balanced default
+        limit=5
     )
 
     if not matches:
         return []
 
-    # Get the full product details for each match
+    # 4. Format the results and convert data types back
     matched_products = []
     for match_tuple in matches:
-        # match_tuple is like ('Small Steel Screws Box of 1000, 1-inch steel screws', 100, 3)
-        # where the last element is the index in the original DataFrame
         product_details = inventory_df.iloc[match_tuple[2]].to_dict()
-        product_details['match_confidence'] = match_tuple[1] # Add the confidence score
+        
+        # Convert numeric fields back from string to their proper types
+        product_details['CurrentStock'] = pd.to_numeric(product_details.get('CurrentStock'), errors='coerce')
+        product_details['MinOrderQty'] = pd.to_numeric(product_details.get('MinOrderQty'), errors='coerce')
+        product_details['Price'] = pd.to_numeric(product_details.get('Price'), errors='coerce')
+        
+        product_details['match_confidence'] = match_tuple[1]
         matched_products.append(product_details)
 
     return matched_products
