@@ -10,7 +10,7 @@ services:
     healthCheckPath: /health
     # --- THIS IS THE FINAL, CORRECT STRUCTURE ---
     # The disk is defined directly within the service that uses it.
-    disks:
+    disk:
       - name: shared-output
         mountPath: /app/output
         sizeGB: 1 # Define the size here
@@ -28,7 +28,7 @@ services:
     branch: main
     dockerCommand: "python worker.py"
     # The worker also attaches to the same disk by referencing its name.
-    disks:
+    disk:
       - name: shared-output
         mountPath: /app/output
         # The size only needs to be defined once. Render is smart enough
