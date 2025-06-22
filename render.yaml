@@ -1,4 +1,4 @@
-# render.yaml - V3 with the corrected dockerCommand property
+# render.yaml - V5, correcting the YAML structure for disk mounts
 
 services:
   # A. The Web Service (Dashboard UI)
@@ -13,9 +13,12 @@ services:
         sync: false
       - key: PYTHONUNBUFFERED
         value: 1
+    
+    # --- FIX #1: This section should NOT be a list. ---
+    # The 'disk' key takes a direct object, so we remove the hyphen.
     disk:
-      - name: shared-output
-        mountPath: /app/output
+      name: shared-output
+      mountPath: /app/output
 
   # B. The Background Worker (Order Processor)
   - type: worker
@@ -23,20 +26,17 @@ services:
     runtime: docker
     repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
     branch: main
-    
-    # --- THIS IS THE FIX ---
-    # Use 'dockerCommand' to override the Dockerfile's CMD for this specific service.
     dockerCommand: "python worker.py"
-    # --- END OF FIX ---
-    
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+        
+    # --- FIX #2: Remove the hyphen here as well. ---
     disk:
-      - name: shared-output
-        mountPath: /app/output
+      name: shared-output
+      mountPath: /app/output
 
-# This section defines the shared disk itself
-disk:
+# --- FIX #3: The top-level key to DEFINE disks must be plural. ---
+disks:
   - name: shared-output
     sizeGB: 1
