@@ -1,4 +1,4 @@
-# render.yaml - V6, based on the latest Render spec for inline disk definitions.
+# render.yaml - V7, Final Correction. No hyphen under the 'disk:' key.
 
 services:
   # A. The Web Service (Dashboard UI)
@@ -8,12 +8,14 @@ services:
     repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
     branch: main
     healthCheckPath: /health
-    # --- THIS IS THE FINAL, CORRECT STRUCTURE ---
-    # The disk is defined directly within the service that uses it.
+    
+    # --- THIS IS THE FINAL FIX ---
+    # The key is 'disk:' (singular) and the value is a direct object (no hyphen).
     disk:
-      - name: shared-output
-        mountPath: /app/output
-        sizeGB: 1 # Define the size here
+      name: shared-output
+      mountPath: /app/output
+      sizeGB: 1 # The size must be defined on first use.
+      
     envVars:
       - key: GEMINI_API_KEY
         sync: false
@@ -27,12 +29,13 @@ services:
     repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
     branch: main
     dockerCommand: "python worker.py"
-    # The worker also attaches to the same disk by referencing its name.
+    
+    # --- The same fix applies here ---
+    # Attach to the disk by referencing its name, again with no hyphen.
     disk:
-      - name: shared-output
-        mountPath: /app/output
-        # The size only needs to be defined once. Render is smart enough
-        # to know it's the same disk.
+      name: shared-output
+      mountPath: /app/output
+      
     envVars:
       - key: GEMINI_API_KEY
         sync: false
