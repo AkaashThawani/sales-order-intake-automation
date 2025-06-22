@@ -13,7 +13,7 @@ services:
         sync: false
       - key: PYTHONUNBUFFERED
         value: 1
-    disks:
+    disk:
       - name: shared-output
         mountPath: /app/output
 
@@ -32,11 +32,11 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-    disks:
+    disk:
       - name: shared-output
         mountPath: /app/output
 
 # This section defines the shared disk itself
-disks:
+disk:
   - name: shared-output
     sizeGB: 1
