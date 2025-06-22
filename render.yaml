@@ -1,8 +1,7 @@
-# This file tells Render how to build and deploy your services.
-# Version adapted for a non-database, CSV-based application.
+# render.yaml - V3 with the corrected dockerCommand property
 
 services:
-  # A. The Web Service (for any future UI)
+  # A. The Web Service (Dashboard UI)
   - type: web
     name: smart-order-intake-web
     runtime: docker
@@ -11,18 +10,33 @@ services:
     healthCheckPath: /health
     envVars:
       - key: GEMINI_API_KEY
-        sync: false # Set this value in the Render dashboard (for security)
+        sync: false
       - key: PYTHONUNBUFFERED
         value: 1
+    disks:
+      - name: shared-output
+        mountPath: /app/output
 
-  # B. The Background Worker (processes the orders)
+  # B. The Background Worker (Order Processor)
   - type: worker
     name: smart-order-intake-worker
     runtime: docker
     repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
     branch: main
-    # The command that starts your actual processing logic
-    startCommand: "python worker.py"
+    
+    # --- THIS IS THE FIX ---
+    # Use 'dockerCommand' to override the Dockerfile's CMD for this specific service.
+    dockerCommand: "python worker.py"
+    # --- END OF FIX ---
+    
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+    disks:
+      - name: shared-output
+        mountPath: /app/output
+
+# This section defines the shared disk itself
+disks:
+  - name: shared-output
+    sizeGB: 1
