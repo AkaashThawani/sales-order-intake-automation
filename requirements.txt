@@ -1,7 +1,20 @@
-google-generativeai
-imap-tools
-pandas
-python-dotenv
-thefuzz
-PyMuPDF
-platform
+# For the web service (even if unused for now)
+Flask==2.2.2
+gunicorn==20.1.0
+
+# LLM interaction
+google-generativeai==0.5.4
+
+# Email processing
+imap-tools==0.50.0
+
+# Data manipulation and fuzzy matching
+pandas==1.5.3
+thefuzz==0.22.1
+python-Levenshtein==0.25.1 # Recommended: Speeds up thefuzz
+
+# For reading .env files locally (does not affect Render)
+python-dotenv==1.0.1
+
+# For writing PDFs
+PyMuPDF==1.24.1

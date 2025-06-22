@@ -1,7 +1,8 @@
 import google.generativeai as genai
 from config import settings
+import os
 
-genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))  # type: ignore
 
 # Define the NEW, more complex function tool for Gemini
 log_sales_order_func = genai.protos.FunctionDeclaration(  # type: ignore
@@ -72,7 +73,7 @@ You are a world-class data entry agent. Your task is to meticulously read a cust
 
 def extract_order_details_from_email(email_body: str):
     """Uses Gemini to extract a full sales order structure from an email."""
-    if not settings.GEMINI_API_KEY:
+    if not os.getenv("GEMINI_API_KEY"):
         print("ERROR: Gemini API Key is not set.")
         return None
 

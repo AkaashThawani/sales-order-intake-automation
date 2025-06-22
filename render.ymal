@@ -1,0 +1,28 @@
+# This file tells Render how to build and deploy your services.
+# Version adapted for a non-database, CSV-based application.
+
+services:
+  # A. The Web Service (for any future UI)
+  - type: web
+    name: smart-order-intake-web
+    runtime: docker
+    repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # Set this value in the Render dashboard (for security)
+      - key: PYTHONUNBUFFERED
+        value: 1
+
+  # B. The Background Worker (processes the orders)
+  - type: worker
+    name: smart-order-intake-worker
+    runtime: docker
+    repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
+    branch: main
+    # The command that starts your actual processing logic
+    startCommand: "python worker.py"
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
