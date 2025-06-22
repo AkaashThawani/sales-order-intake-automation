@@ -72,18 +72,15 @@ if __name__ == "__main__":
     try:
         with open(test_email_path, 'r') as f:
             test_email_content = f.read()
-        print(f"Worker started. Will process a sample order from '{test_email_path}' in a loop.")
     except FileNotFoundError:
-        print(f"❌ WARNING: Test email not found at '{test_email_path}'. The worker will run but do nothing.")
+        print("Test email not found, nothing to process.")
         test_email_content = None
 
-    # --- MAIN WORKER LOOP ---
-    while True:
-        if test_email_content:
-            print("\nFound new order to process...")
-            process_single_order(test_email_content, inventory_df)
-        else:
-            print("No test email loaded, worker is idle.")
-            
-        print("Worker is sleeping for 60 seconds...")
-        time.sleep(60)
+    # --- THIS IS THE CHANGE ---
+    # We remove the loop. The script now runs once and exits.
+    if test_email_content:
+        print("Cron job running: processing one order...")
+        process_single_order(test_email_content, inventory_df)
+    
+    print("Cron job finished.")
+    # --- END OF CHANGE ---

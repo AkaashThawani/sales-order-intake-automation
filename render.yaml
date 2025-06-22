@@ -22,20 +22,17 @@ services:
       - key: PYTHONUNBUFFERED
         value: 1
 
-  # B. The Background Worker (Order Processor)
-  - type: worker
-    name: smart-order-intake-worker
+   # B. The Order Processor (as a free Cron Job)
+  - type: cron
+    name: smart-order-intake-cron
     runtime: docker
-    repo: https://github.com/AkaashThawani/Hackathon # This should be your repo URL
+    repo: https://github.com/AkaashThawani/Hackathon # Use your repo URL
     branch: main
+    schedule: "*/15 * * * *" # This means "run every 15 minutes"
     dockerCommand: "python worker.py"
-    
-    # --- The same fix applies here ---
-    # Attach to the disk by referencing its name, again with no hyphen.
     disk:
       name: shared-output
       mountPath: /app/output
-      
     envVars:
       - key: GEMINI_API_KEY
         sync: false
