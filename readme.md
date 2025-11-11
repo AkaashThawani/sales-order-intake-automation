@@ -4,6 +4,28 @@
 
 This AI-powered Python application automates sales order processing from emails. It extracts order details using Google Gemini, validates against product catalogs and rules, and generates PDFs. Features modular design, Flask API, and deployment options.
 
+## Workflow Overview
+
+```
+Customer Email → AI Processing → Order Status: "inquiry"
+       ↓
+Sales Team Reviews → Crafts Response → Sends Email
+       ↓
+Order Status: "response" or "follow_up"
+       ↓
+Customer Responds → Continue Conversation
+       ↓
+Order Status: "completed"
+```
+
+**Detailed Flow:**
+1. **Customer sends email** with order inquiry
+2. **AI processes email** → Extracts order details, creates order with status "inquiry"
+3. **Sales team reviews** → Validates products, checks rules, crafts response
+4. **Response sent** → Order status becomes "response" or "follow_up"
+5. **Customer responds** → Conversation continues until order completion
+6. **Order finalized** → Status becomes "completed"
+
 ## Key Features
 
 - **AI-Powered Data Extraction**: Leverages Google Gemini to reliably extract key order details from raw email text, including customer name, address, delivery dates, product names, quantities, and general notes.

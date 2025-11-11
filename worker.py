@@ -1,86 +1,182 @@
+#!/usr/bin/env python3
+"""
+Background worker for automated sales order processing.
+Handles email fetching, workflow processing, and task execution.
+"""
+
 import time
-import pandas as pd
-import os
+import schedule
+import signal
+import sys
+from datetime import datetime, timedelta
+from core.workflow_processor import WorkflowProcessor
+from core.email_manager import EmailManager
+from models import SessionLocal, WorkflowTask, Order
+import logging
 
-# Import the core logic functions from your existing files
-from core.llm_extractor import extract_order_details_from_email
-from core.decision_engine import process_and_validate_order
-from core.output_generator import create_sales_order_json
-from core.pdf_writer import fill_sales_order_pdf
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('worker.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# --- CONFIGURATION ---
-PRODUCT_CATALOG_PATH = "data/Product Catalog.csv"
-PDF_TEMPLATE_PATH = "sales_order_form_full.pdf" # Make sure this file is in the root
-OUTPUT_FOLDER = "output"
+class SalesOrderWorker:
+    """Background worker for automated sales order processing"""
 
-def load_inventory_data(path: str) -> pd.DataFrame:
-    """Loads the product catalog into a pandas DataFrame."""
-    print(f"Loading product catalog from: {path}")
-    try:
-        inventory_df = pd.read_csv(path, dtype=str)
-        print("✅ Product catalog loaded successfully into memory.")
-        return inventory_df
-    except FileNotFoundError:
-        print(f"❌ CRITICAL ERROR: Product catalog not found at {path}. The worker cannot start.")
-        # In a real scenario, you might want to send an alert here.
-        return None # type: ignore
+    def __init__(self):
+        self.workflow_processor = WorkflowProcessor()
+        self.email_manager = EmailManager()
+        self.running = True
+        self.last_email_check = None
+        self.last_workflow_check = None
 
-def process_single_order(email_content: str, inventory_df: pd.DataFrame):
-    """
-    Runs the full end-to-end pipeline for one order email.
-    """
-    print("\n----------------------------------------------------")
-    print("1. Extracting order details with LLM...")
-    extracted_data = extract_order_details_from_email(email_content)
-    
-    if not extracted_data:
-        print("❌ LLM extraction failed. Skipping this order.")
-        return
+        # Setup signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
 
-    print("2. Validating order against inventory...")
-    validated_order = process_and_validate_order(extracted_data, inventory_df)
+        logger.info("Sales Order Worker initialized")
 
-    print("3. Generating JSON output file...")
-    json_filepath = create_sales_order_json(validated_order, output_folder=OUTPUT_FOLDER)
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully"""
+        logger.info(f"Received signal {signum}, shutting down gracefully...")
+        self.running = False
 
-    if not json_filepath:
-        print("❌ Failed to create JSON file. Skipping PDF generation.")
-        return
-        
-    print("4. Generating PDF sales order form...")
-    fill_sales_order_pdf(json_filepath, PDF_TEMPLATE_PATH, output_folder=OUTPUT_FOLDER)
-    print("✅ Order processing complete.")
-    print("----------------------------------------------------\n")
+    def start(self):
+        """Start the worker with scheduled tasks"""
+        logger.info("Starting Sales Order Worker...")
 
+        # Schedule tasks
+        schedule.every(2).minutes.do(self._process_emails)
+        schedule.every(1).minutes.do(self._process_workflows)
+        schedule.every(5).minutes.do(self._cleanup_old_tasks)
+        schedule.every(1).hours.do(self._health_check)
+
+        # Run initial tasks
+        logger.info("Running initial tasks...")
+        self._process_emails()
+        self._process_workflows()
+
+        # Main loop
+        logger.info("Worker started. Press Ctrl+C to stop.")
+        while self.running:
+            try:
+                schedule.run_pending()
+                time.sleep(10)  # Check every 10 seconds
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                time.sleep(30)  # Wait before retrying
+
+        logger.info("Worker stopped gracefully")
+
+    def _process_emails(self):
+        """Fetch and process new emails"""
+        try:
+            if self.last_email_check and (datetime.now() - self.last_email_check) < timedelta(minutes=1):
+                return  # Don't check too frequently
+
+            logger.info("Checking for new emails...")
+            processed_emails = self.email_manager.fetch_and_process_emails()
+
+            if processed_emails:
+                logger.info(f"Processed {len(processed_emails)} emails")
+                for email_info in processed_emails:
+                    email_data = email_info['email_data']
+                    result = self.workflow_processor.process_email(email_data)
+                    logger.info(f"Email {email_data['id']} processed: {result['actions_taken']}")
+            else:
+                logger.debug("No new emails to process")
+
+            self.last_email_check = datetime.now()
+
+        except Exception as e:
+            logger.error(f"Error processing emails: {e}")
+
+    def _process_workflows(self):
+        """Process pending workflow tasks"""
+        try:
+            if self.last_workflow_check and (datetime.now() - self.last_workflow_check) < timedelta(seconds=30):
+                return  # Don't check too frequently
+
+            logger.info("Processing workflow tasks...")
+            self.workflow_processor.process_pending_orders()
+            logger.debug("Workflow processing completed")
+
+            self.last_workflow_check = datetime.now()
+
+        except Exception as e:
+            logger.error(f"Error processing workflows: {e}")
+
+    def _cleanup_old_tasks(self):
+        """Clean up old completed/failed tasks"""
+        try:
+            db = SessionLocal()
+            # Delete tasks older than 30 days
+            cutoff_date = datetime.now() - timedelta(days=30)
+
+            deleted_count = db.query(WorkflowTask).filter(
+                WorkflowTask.status.in_(['completed', 'failed']),
+                WorkflowTask.completed_at < cutoff_date
+            ).delete()
+
+            db.commit()
+            if deleted_count > 0:
+                logger.info(f"Cleaned up {deleted_count} old workflow tasks")
+
+        except Exception as e:
+            logger.error(f"Error cleaning up tasks: {e}")
+        finally:
+            db.close()
+
+    def _health_check(self):
+        """Perform health checks and log system status"""
+        try:
+            db = SessionLocal()
+
+            # Get system stats
+            total_orders = db.query(Order).count()
+            pending_tasks = db.query(WorkflowTask).filter(WorkflowTask.status == 'pending').count()
+            failed_tasks = db.query(WorkflowTask).filter(WorkflowTask.status == 'failed').count()
+
+            logger.info(f"Health Check - Orders: {total_orders}, Pending Tasks: {pending_tasks}, Failed Tasks: {failed_tasks}")
+
+            # Alert if too many failed tasks
+            if failed_tasks > 10:
+                logger.warning(f"High number of failed tasks: {failed_tasks}")
+
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+        finally:
+            db.close()
+
+    def run_once(self):
+        """Run all tasks once (for testing/manual execution)"""
+        logger.info("Running all tasks once...")
+
+        try:
+            self._process_emails()
+            self._process_workflows()
+            self._cleanup_old_tasks()
+            self._health_check()
+            logger.info("All tasks completed successfully")
+        except Exception as e:
+            logger.error(f"Error running tasks: {e}")
+            raise
+
+def main():
+    """Main entry point"""
+    worker = SalesOrderWorker()
+
+    if len(sys.argv) > 1 and sys.argv[1] == '--once':
+        # Run once for testing
+        worker.run_once()
+    else:
+        # Run continuously
+        worker.start()
 
 if __name__ == "__main__":
-    # Load the inventory ONCE when the worker starts
-    inventory_df = load_inventory_data(PRODUCT_CATALOG_PATH)
-
-    if inventory_df is None:
-        # If the catalog fails to load, stop the worker.
-        exit(1)
-
-    # In a real system, this loop would connect to an email inbox (IMAP).
-    # For now, we simulate processing a new order from a file every 30 seconds.
-    # We will use an email from your test_data as an example.
-    
-    # --- SIMULATION SETUP ---
-    # Make sure you have this file in your test_data folder
-    test_email_path = "test_data/sample_email_2.txt" 
-    
-    try:
-        with open(test_email_path, 'r') as f:
-            test_email_content = f.read()
-    except FileNotFoundError:
-        print("Test email not found, nothing to process.")
-        test_email_content = None
-
-    # --- THIS IS THE CHANGE ---
-    # We remove the loop. The script now runs once and exits.
-    if test_email_content:
-        print("Cron job running: processing one order...")
-        process_single_order(test_email_content, inventory_df)
-    
-    print("Cron job finished.")
-    # --- END OF CHANGE ---
+    main()
