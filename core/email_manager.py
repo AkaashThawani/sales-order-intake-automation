@@ -19,28 +19,18 @@ class EmailManager:
         self.email_account = os.getenv('EMAIL_ACCOUNT')
         self.email_password = os.getenv('EMAIL_PASSWORD')
 
-        # Allow demo mode without credentials
-        self.demo_mode = not self.email_account or not self.email_password
-
         # Allow test mode with dummy credentials
         self.test_mode = (
             self.email_account == 'test@example.com' and
             self.email_password == 'dummy_password_for_testing'
         )
 
-        if self.demo_mode and not self.test_mode:
-            print("📧 Demo mode: Email features disabled (no credentials configured)")
-            print("   You can still use the API and web interface for testing")
-        elif self.test_mode:
-            print("📧 Test mode: Using dummy email credentials")
+        if not self.email_account or not self.email_password:
+            if not self.test_mode:
+                raise ValueError("Email credentials not configured. Set EMAIL_ACCOUNT and EMAIL_PASSWORD environment variables.")
 
     def fetch_and_process_emails(self) -> List[Dict[str, Any]]:
         """Fetch new emails and return them for processing"""
-        if self.demo_mode:
-            print("📧 Demo mode: Returning existing email logs from database")
-            # Return existing email logs from database for demo purposes
-            return self._get_existing_email_logs()
-
         emails = self._fetch_new_emails()
         processed_emails = []
 
@@ -57,55 +47,10 @@ class EmailManager:
 
         return processed_emails
 
-    def _get_existing_email_logs(self) -> List[Dict[str, Any]]:
-        """Get existing email logs from database for demo mode"""
-        db = SessionLocal()
-        try:
-            # Get recent email logs from database
-            email_logs = db.query(EmailLog).order_by(EmailLog.received_at.desc()).limit(50).all()
-
-            processed_emails = []
-            for log in email_logs:
-                email_data = {
-                    'id': log.email_id,
-                    'message_id': log.message_id or '',
-                    'subject': log.subject or '',
-                    'sender': log.sender or '',
-                    'recipient': log.recipient or '',
-                    'body': log.body or '',
-                    'references': log.references or '',
-                    'in_reply_to': log.in_reply_to or '',
-                    'received_at': log.received_at,
-                    'workflow_stage': log.workflow_stage,
-                    'intent_summary': log.intent_summary,
-                    'requires_action': log.requires_action
-                }
-                processed_emails.append({
-                    'email_data': email_data,
-                    'log_entry': log
-                })
-
-            print(f"📧 Demo mode: Returned {len(processed_emails)} existing email logs from database")
-            return processed_emails
-
-        except Exception as e:
-            print(f"Error getting existing email logs: {e}")
-            return []
-        finally:
-            db.close()
-
     def _fetch_new_emails(self) -> List[Dict[str, Any]]:
         """Fetch unread emails from inbox"""
-        if self.demo_mode:
-            print("📧 Demo mode: Skipping real email fetch")
-            return []
-
         if self.test_mode:
             print("📧 Test mode: Skipping real email fetch")
-            return []
-
-        if not self.email_account or not self.email_password:
-            print("📧 No email credentials: Skipping email fetch")
             return []
 
         try:
