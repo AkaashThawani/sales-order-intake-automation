@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import os
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
@@ -74,6 +75,7 @@ class EmailManager:
                     sender = self._get_header(email_message, 'from') or ''
                     message_id = self._get_header(email_message, 'Message-ID') or ''
                     references = self._get_header(email_message, 'References') or ''
+                    in_reply_to = self._get_header(email_message, 'In-Reply-To') or ''
 
                     # Get email body
                     body = self._extract_email_body(email_message)
@@ -85,6 +87,7 @@ class EmailManager:
                         'sender': sender,
                         'body': body,
                         'references': references,
+                        'in_reply_to': in_reply_to,
                         'raw_email': email_body,
                         'received_at': datetime.now()
                     })
@@ -140,8 +143,14 @@ class EmailManager:
                 sender=email_data['sender'],
                 recipient=self.email_account if direction == 'incoming' else email_data.get('recipient', ''),
                 body=email_data['body'],
+                message_id=email_data.get('message_id', ''),
+                references=email_data.get('references', ''),
+                in_reply_to=email_data.get('in_reply_to', ''),
                 received_at=email_data['received_at'],
-                order_id=order_id
+                order_id=order_id,
+                workflow_stage=email_data.get('workflow_stage'),
+                intent_summary=email_data.get('intent_summary'),
+                requires_action=email_data.get('requires_action', True)
             )
             db.add(email_log)
             db.commit()
@@ -154,14 +163,8 @@ class EmailManager:
         finally:
             db.close()
 
-    def send_response_email(self, order_id: int, subject: str, body: str, attachments: List[str] = None):
-        """Send response email for an order"""
-        if self.test_mode:
-            print(f"📧 Test mode: Simulating email send for order {order_id}")
-            print(f"   Subject: {subject}")
-            print(f"   Body preview: {body[:100]}...")
-            return
-
+    def send_response_email(self, order_id: int, subject: str, body: str, attachments: List[str] = None, reply_to_message_id: str = None):
+        """Send response email for an order with proper threading"""
         db = SessionLocal()
         try:
             # Get order and customer info
@@ -173,21 +176,52 @@ class EmailManager:
             if not customer:
                 raise ValueError(f"Customer for order {order_id} not found")
 
-            # Send email
-            self._send_email(customer.email, subject, body, attachments or [])
+            # Get threading information from the latest email in the chain
+            threading_info = None
+            if reply_to_message_id:
+                # Find the email we're replying to
+                reply_email = db.query(EmailLog).filter(EmailLog.message_id == reply_to_message_id).first()
+                if reply_email:
+                    threading_info = {
+                        'in_reply_to': reply_email.message_id,
+                        'references': reply_email.references or reply_email.message_id
+                    }
 
-            # Log outgoing email
+            # Generate message ID for threading (even in test mode)
+            message_id = f"<{uuid.uuid4()}@{self.email_account.split('@')[1]}>"
+
+            # Send email with threading (skip in test mode)
+            if not self.test_mode:
+                message_id = self._send_email(customer.email, subject, body, attachments or [], threading_info)
+                print(f"✅ Sent response email for order {order_id}")
+            else:
+                print(f"📧 Test mode: Simulating email send for order {order_id}")
+                print(f"   Subject: {subject}")
+                print(f"   Body preview: {body[:100]}...")
+
+            # Determine workflow stage for outgoing email
+            # If order is in 'follow_up' status, this is a follow-up response
+            # Otherwise it's a regular response
+            workflow_stage = 'FOLLOW_UP' if order.status == 'follow_up' else 'RESPONSE'
+
+            # Log outgoing email with threading info (ALWAYS log, even in test mode)
             email_data = {
                 'id': f"outbound_{order_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'message_id': message_id,
                 'subject': subject,
                 'sender': self.email_account,
                 'recipient': customer.email,
                 'body': body,
-                'received_at': datetime.now()
+                'in_reply_to': threading_info['in_reply_to'] if threading_info else '',
+                'references': threading_info['references'] if threading_info else '',
+                'received_at': datetime.now(),
+                'workflow_stage': workflow_stage,
+                'intent_summary': f'{"Follow-up" if workflow_stage == "FOLLOW_UP" else "Initial"} response sent to customer{" (TEST MODE)" if self.test_mode else ""}',
+                'requires_action': False
             }
-            self._log_email(email_data, 'outgoing', order_id)
-
-            print(f"✅ Sent response email for order {order_id}")
+            print(f"📝 LOGGING OUTGOING EMAIL: {email_data['id']} for order {order_id}")
+            logged_email = self._log_email(email_data, 'outgoing', order_id)
+            print(f"✅ EMAIL LOGGED: ID {logged_email.id}, direction: {logged_email.direction}, workflow_stage: {logged_email.workflow_stage}")
 
         except Exception as e:
             print(f"Error sending response email for order {order_id}: {e}")
@@ -195,13 +229,25 @@ class EmailManager:
         finally:
             db.close()
 
-    def _send_email(self, to_email: str, subject: str, body: str, attachments: List[str] = None):
-        """Send email via SMTP"""
+    def _send_email(self, to_email: str, subject: str, body: str, attachments: List[str] = None, threading_info: Dict[str, str] = None) -> str:
+        """Send email via SMTP with threading support"""
         try:
             msg = MIMEMultipart()
             msg['From'] = self.email_account
             msg['To'] = to_email
             msg['Subject'] = subject
+
+            # Generate unique Message-ID for this email
+            import uuid
+            message_id = f"<{uuid.uuid4()}@{self.email_account.split('@')[1]}>"
+            msg['Message-ID'] = message_id
+
+            # Add threading headers if replying
+            if threading_info:
+                if threading_info.get('in_reply_to'):
+                    msg['In-Reply-To'] = threading_info['in_reply_to']
+                if threading_info.get('references'):
+                    msg['References'] = threading_info['references']
 
             msg.attach(MIMEText(body, 'plain'))
 
@@ -221,6 +267,8 @@ class EmailManager:
             server.login(self.email_account, self.email_password)
             server.send_message(msg)
             server.quit()
+
+            return message_id
 
         except Exception as e:
             print(f"Error sending email to {to_email}: {e}")
@@ -273,3 +321,14 @@ class EmailManager:
         if match:
             return match.group(1).strip()
         return "Unknown Customer"
+
+    def extract_email_from_content(self, content: str) -> str:
+        """Extract email address from email content"""
+        import re
+        # Look for email patterns in the content
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        matches = re.findall(email_pattern, content)
+        if matches:
+            # Return the first email found (usually the contact email)
+            return matches[0]
+        return None

@@ -94,19 +94,26 @@ class RuleEngine:
         }
 
     def _calculate_order_metrics(self, order: Order) -> Dict[str, Any]:
-        """Calculate metrics for rule evaluation"""
-        # Get line items
+        """Calculate metrics for rule evaluation based on VALIDATED items only"""
+        # Get line items - only count VALIDATED items for business rules
         line_items = order.line_items or []
+        validated_items = [item for item in line_items if item.status == 'VALIDATED']
 
-        total_quantity = sum(item.requested_quantity for item in line_items)
+        total_quantity = sum(item.requested_quantity for item in validated_items)
 
-        # Calculate total amount (simplified - would need product pricing)
-        total_amount = 0.0  # Placeholder - would calculate from product prices
+        # Calculate total amount from validated items with pricing
+        total_amount = 0.0
+        for item in validated_items:
+            if item.unit_price and item.total_price:
+                try:
+                    total_amount += float(item.total_price or 0)
+                except (ValueError, TypeError):
+                    pass  # Skip invalid prices
 
         return {
             "total_quantity": total_quantity,
             "total_amount": total_amount,
-            "item_count": len(line_items),
+            "item_count": len(validated_items),  # Only validated items
             "customer_email": order.customer.email if order.customer else None
         }
 
@@ -209,9 +216,12 @@ class RuleEngine:
 
         return rule.id
 
-    def get_active_rules(self) -> List[Dict[str, Any]]:
-        """Get all active rules"""
-        rules = self.db.query(WorkflowRule).filter(WorkflowRule.is_active == True).order_by(WorkflowRule.priority).all()
+    def get_active_rules(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """Get all active rules (optionally include inactive)"""
+        query = self.db.query(WorkflowRule)
+        if not include_inactive:
+            query = query.filter(WorkflowRule.is_active == True)
+        rules = query.order_by(WorkflowRule.priority).all()
 
         return [{
             "id": rule.id,
@@ -221,6 +231,7 @@ class RuleEngine:
             "actions": rule.actions,
             "priority": rule.priority,
             "rule_type": rule.rule_type,
+            "is_active": rule.is_active,
             "created_at": rule.created_at.isoformat() if rule.created_at else None
         } for rule in rules]
 

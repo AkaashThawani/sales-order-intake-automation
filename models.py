@@ -5,7 +5,8 @@ import datetime
 import os
 
 # Use SQLite for development, easy to switch to PostgreSQL later
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///sales_orders.db')
+# Hardcoded to root directory to avoid path confusion
+DATABASE_URL = 'sqlite:///d:/sale-order-automation/sales_orders.db'
 engine = create_engine(DATABASE_URL, echo=False)  # Disabled SQL logging
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -96,6 +97,11 @@ class EmailLog(Base):
     sender = Column(String)
     recipient = Column(String)
     body = Column(Text)
+
+    # Email threading headers
+    message_id = Column(String)  # RFC 2822 Message-ID header
+    references = Column(Text)    # RFC 2822 References header
+    in_reply_to = Column(String) # RFC 2822 In-Reply-To header
 
     # AI Classification results
     workflow_stage = Column(String)  # inquiry, follow_up, response, clarification

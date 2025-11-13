@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
 from datetime import datetime
+from dotenv import load_dotenv
 from models import SessionLocal, Order, Customer, LineItem, EmailLog, WorkflowTask, WorkflowRule, create_tables
 from core.workflow_processor import WorkflowProcessor
 from core.email_manager import EmailManager
@@ -11,6 +12,9 @@ from core.rule_engine import RuleEngine
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
+
+# Load environment variables
+load_dotenv()
 
 # Create database tables on startup
 create_tables()
@@ -37,7 +41,10 @@ email_manager = EmailManager()
 # Pydantic models for API requests/responses
 class EmailProcessRequest(BaseModel):
     email_content: str
-    customer_email: Optional[str] = None
+    order_id: Optional[int] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields in the request
 
 class OrderResponse(BaseModel):
     id: int
@@ -63,6 +70,7 @@ class EmailLogResponse(BaseModel):
     subject: str
     sender: str
     recipient: str
+    body: Optional[str]
     workflow_stage: Optional[str]
     intent_summary: Optional[str]
     requires_action: bool
@@ -84,6 +92,15 @@ class RuleCreateRequest(BaseModel):
     priority: int = 1
     rule_type: str = "quantity"
 
+class RuleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    conditions: Optional[Dict[str, Any]] = None
+    actions: Optional[Dict[str, Any]] = None
+    priority: Optional[int] = None
+    rule_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class RuleResponse(BaseModel):
     id: int
     name: str
@@ -102,6 +119,11 @@ class RuleTestRequest(BaseModel):
 class OrderStatusUpdateRequest(BaseModel):
     status: str
     notes: Optional[str] = None
+
+class EmailResponseRequest(BaseModel):
+    response_content: str
+    subject: Optional[str] = None
+    reply_to_message_id: Optional[str] = None
 
 # Database dependency
 def get_db():
@@ -147,24 +169,42 @@ async def process_email(
         lines = [line.strip() for line in request.email_content.split('\n') if line.strip()]
         subject = lines[0] if lines else "Customer Inquiry"
 
+        # Get customer email - for follow-ups, use existing order's customer email
+        if request.order_id:
+            print(f"🔍 Looking up order_id: {request.order_id} (type: {type(request.order_id)})")
+            # For follow-up emails, get customer email from existing order
+            existing_order = db.query(Order).filter(Order.id == request.order_id).first()
+            print(f"📋 Found existing order: {existing_order}")
+            if not existing_order:
+                raise HTTPException(status_code=404, detail=f"Order {request.order_id} not found")
+            if not existing_order.customer:
+                raise HTTPException(status_code=404, detail=f"Order {request.order_id} has no associated customer")
+            customer_email = existing_order.customer.email
+            print(f"📧 Using customer email from existing order: {customer_email}")
+        else:
+            # For new inquiries, extract email from content
+            customer_email = email_manager.extract_email_from_content(request.email_content)
+            if not customer_email:
+                raise HTTPException(status_code=400, detail="Customer email not found in email content")
+
         # Create email data structure
         email_data = {
             'id': f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             'subject': subject,
-            'sender': f"{request.customer_email or 'unknown@example.com'}",
+            'sender': customer_email,  # Use extracted or provided email
             'body': request.email_content,
             'message_id': f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             'references': '',
             'received_at': datetime.now()
         }
 
-        # Process through workflow
-        result = workflow_processor.process_email(email_data)
+        # Process through workflow (with explicit order_id if provided)
+        result = workflow_processor.process_email(email_data, explicit_order_id=request.order_id)
 
         if result['orders_affected']:
             order_id = result['orders_affected'][0]
 
-            # Log the initial email to EmailLog for conversation tracking
+            # Log the email to EmailLog for conversation tracking
             email_log = EmailLog(
                 email_id=email_data['id'],
                 direction='incoming',
@@ -174,19 +214,19 @@ async def process_email(
                 body=email_data['body'],
                 received_at=email_data['received_at'],
                 order_id=order_id,
-                workflow_stage='INQUIRY',
-                intent_summary='Manual email processing via demo/API',
+                workflow_stage='INQUIRY' if not request.order_id else 'CLARIFICATION',
+                intent_summary='Manual email processing via demo/API' + (' with explicit order_id' if request.order_id else ''),
                 requires_action=True
             )
             db.add(email_log)
             db.commit()
 
-            # Get the created order
+            # Get the order
             order = db.query(Order).filter(Order.id == order_id).first()
             if not order:
                 raise HTTPException(status_code=404, detail="Order not found after creation")
 
-            # Run full workflow processing using the SAME database session
+            # Run workflow processing for the order
             print(f"🚀 Starting workflow processing for order {order_id}")
             try:
                 # Process the order through the workflow using the same DB session
@@ -201,14 +241,18 @@ async def process_email(
                 print(f"❌ Workflow processing error: {workflow_error}")
                 import traceback
                 traceback.print_exc()
-                # Continue anyway - order was created successfully
+                # Continue anyway
 
             return _order_to_response(order, db)
 
         raise HTTPException(status_code=400, detail="Failed to process email")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ CRITICAL ERROR in process_email: {str(e)}")
+        print(f"📋 Full traceback:\n{error_details}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}\n\nTraceback: {error_details}")
 
 def _generate_demo_response(db: Session, order: Order):
     """Generate an automated response for demo purposes"""
@@ -220,37 +264,69 @@ def _generate_demo_response(db: Session, order: Order):
         if not line_items:
             return  # No items to respond about
 
+        # Check if this is a clarification response (has recent clarification in notes)
+        has_recent_clarification = False
+        if order.customer_notes:
+            # Look for recent clarification markers in the notes
+            clarification_markers = ['[CLARIFICATION', '[QUANTITY UPDATES']
+            has_recent_clarification = any(marker in order.upper() for marker in clarification_markers for line in order.customer_notes.split('\n'))
+
         # Create response content
-        response_lines = []
+        validated_items = []
+        issues_items = []
         total_value = 0
 
         for item in line_items:
             if item.status == 'VALIDATED' and item.unit_price and item.total_price:
-                response_lines.append(f"- {item.product_name or item.requested_name}: ${item.unit_price} x {item.requested_quantity} = ${item.total_price}")
-                try:
-                    total_value += float(item.total_price or 0)
-                except:
-                    pass
+                validated_items.append({
+                    'name': item.product_name or item.requested_name,
+                    'quantity': item.requested_quantity,
+                    'unit_price': float(item.unit_price or 0),
+                    'total_price': float(item.total_price or 0)
+                })
+                total_value += float(item.total_price or 0)
             elif item.status == 'NOT_FOUND':
-                response_lines.append(f"- {item.requested_name}: Item not found in catalog - will follow up")
+                issues_items.append(f"- {item.requested_name}: Item not found in catalog - will follow up")
             elif item.status == 'MOQ_NOT_MET':
-                response_lines.append(f"- {item.requested_name}: Minimum order quantity not met")
+                issues_items.append(f"- {item.requested_name}: Minimum order quantity not met")
             else:
-                response_lines.append(f"- {item.requested_name}: Processing - will provide quote shortly")
+                issues_items.append(f"- {item.requested_name}: Processing - will provide quote shortly")
 
-        response_body = f"""Dear {order.customer.name or 'Valued Customer'},
+        # Build professional response based on context
+        customer_name = order.customer.name or 'Valued Customer'
 
-Thank you for your inquiry! We've processed your order request:
+        if has_recent_clarification:
+            # This is a response to a clarification
+            intro = f"Dear {customer_name},\n\nThank you for your clarification! I've updated your order based on your feedback."
+        else:
+            # This is an initial response
+            intro = f"Dear {customer_name},\n\nThank you for your order inquiry! I've processed your request and here's the current status."
 
-{chr(10).join(response_lines)}
+        # Build order summary
+        order_summary = "\n\n📋 **Order Summary:**\n"
 
-{f"Total estimated value: ${total_value:.2f}" if total_value > 0 else ""}
+        if validated_items:
+            order_summary += "\n✅ **Confirmed Items:**\n"
+            for item in validated_items:
+                order_summary += f"• {item['name']}: {item['quantity']} × ${item['unit_price']:.2f} = ${item['total_price']:.2f}\n"
 
-Please review the details above. If everything looks correct, we can proceed with your order. If you have any questions or need modifications, please let us know.
+            if total_value > 0:
+                order_summary += f"\n💰 **Total Estimated Value:** ${total_value:.2f}\n"
 
-Best regards,
-Sales Team
-"""
+        if issues_items:
+            order_summary += f"\n⚠️ **Items Needing Attention:**\n{chr(10).join(issues_items)}\n"
+
+        # Add next steps
+        if validated_items and not issues_items:
+            next_steps = "\n🎉 **Great news!** All items in your order are ready to proceed. We'll prepare your sales order documentation and send it for final approval.\n\nPlease review the details above. If everything looks correct, we can move forward with processing your order."
+        elif issues_items:
+            next_steps = "\n📝 **Next Steps:** Please review the items marked for attention above and let us know how you'd like to proceed. We're here to help resolve any outstanding issues."
+        else:
+            next_steps = "\n📝 **Next Steps:** We're working on getting quotes for your requested items. We'll follow up soon with pricing and availability information."
+
+        closing = "\n\nIf you have any questions or need modifications, please don't hesitate to let us know.\n\nBest regards,\nSales Team\nABC Coffee Company"
+
+        response_body = intro + order_summary + next_steps + closing
 
         # Create outgoing email log
         email_log = EmailLog(
@@ -263,7 +339,7 @@ Sales Team
             received_at=datetime.now(),
             order_id=order.id,
             workflow_stage='RESPONSE',
-            intent_summary='Automated response with order details and pricing',
+            intent_summary='Professional automated response with order details and next steps',
             requires_action=False
         )
         db.add(email_log)
@@ -276,6 +352,8 @@ Sales Team
 
     except Exception as e:
         print(f"Error generating demo response: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
 
 @app.post("/api/fetch-emails")
@@ -350,6 +428,45 @@ async def get_order_emails(order_id: int, db: Session = Depends(get_db)):
 
     return [_email_to_response(email) for email in emails]
 
+@app.get("/api/emails/conversations", response_model=List[Dict[str, Any]])
+async def get_email_conversations(db: Session = Depends(get_db)):
+    """Get email conversations grouped by order"""
+    # Get all emails grouped by order_id
+    emails_by_order = {}
+    all_emails = db.query(EmailLog).order_by(EmailLog.received_at.desc()).all()
+
+    for email in all_emails:
+        order_id = email.order_id
+        if order_id not in emails_by_order:
+            emails_by_order[order_id] = []
+        emails_by_order[order_id].append(_email_to_response(email))
+
+    # Convert to conversation format
+    conversations = []
+    for order_id, emails in emails_by_order.items():
+        if order_id:  # Only include emails that belong to orders
+            order = db.query(Order).filter(Order.id == order_id).first()
+            latest_email = emails[0]  # Already sorted by received_at desc
+
+            conversation = {
+                "order_id": order_id,
+                "customer_name": order.customer.name if order and order.customer else "Unknown",
+                "customer_email": order.customer.email if order and order.customer else "unknown@example.com",
+                "subject": latest_email.subject,
+                "latest_email_date": latest_email.received_at,
+                "email_count": len(emails),
+                "status": order.status if order else "unknown",
+                "direction": latest_email.direction,
+                "workflow_stage": order.status if order else "unknown",  # Use current order status
+                "requires_action": latest_email.requires_action
+            }
+            conversations.append(conversation)
+
+    # Sort by latest email date
+    conversations.sort(key=lambda x: x["latest_email_date"], reverse=True)
+
+    return conversations
+
 @app.put("/api/orders/{order_id}/status")
 async def update_order_status(
     order_id: int,
@@ -370,9 +487,21 @@ async def update_order_status(
     order.status = request.status
     order.updated_at = datetime.utcnow()
 
+    # Handle approval when status is set to 'response' with approval notes
+    if request.status == 'response' and request.notes and 'approved' in request.notes.lower():
+        order.approved_by = 'manager'  # In a real app, this would be the current user
+        order.approved_at = datetime.utcnow()
+        order.approval_required = False  # Clear the approval requirement
+
     if request.notes:
         current_notes = order.human_notes or ""
         order.human_notes = current_notes + f"\n\n[{datetime.utcnow()}] Status changed from '{old_status}' to '{request.status}': {request.notes}"
+
+    # Update workflow_stage for all emails in this order to reflect new order status
+    email_logs = db.query(EmailLog).filter(EmailLog.order_id == order_id).all()
+    for email_log in email_logs:
+        # Update email workflow_stage to match new order status
+        email_log.workflow_stage = request.status
 
     if request.status == 'completed':
         order.completed_at = datetime.utcnow()
@@ -380,6 +509,317 @@ async def update_order_status(
     db.commit()
 
     return {"message": f"Order {order_id} status updated to {request.status}"}
+
+@app.get("/api/orders/{order_id}/generate-pdf")
+async def generate_order_pdf(order_id: int, db: Session = Depends(get_db)):
+    """Generate a PDF for an order using PyMuPDF"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        import fitz  # PyMuPDF
+        from io import BytesIO
+
+        # Get line items
+        line_items = db.query(LineItem).filter(LineItem.order_id == order.id).all()
+
+        # Create a new PDF document
+        doc = fitz.open()
+        page = doc.new_page()
+
+        # Set up fonts and colors
+        font_size_title = 24
+        font_size_header = 14
+        font_size_normal = 11
+        font_size_small = 9
+
+        # Colors
+        black = (0, 0, 0)
+        gray = (0.5, 0.5, 0.5)
+        light_gray = (0.9, 0.9, 0.9)
+
+        # Page dimensions
+        page_width = page.rect.width
+        page_height = page.rect.height
+        margin = 50
+        y_position = margin
+
+        # Company Header - Center manually (approximate centering)
+        company_text = "ABC Coffee Company"
+        # Approximate centering - ABC Coffee Company is about 200 units wide at size 24
+        x_center = (page_width - 200) / 2
+        page.insert_text((x_center, y_position), company_text,
+                        fontsize=font_size_title, color=black)
+        y_position += 40
+
+        order_title = f"Sales Order #{order.id}"
+        # Approximate centering - Sales Order #123 is about 150 units wide at size 14
+        x_title_center = (page_width - 150) / 2
+        page.insert_text((x_title_center, y_position), order_title,
+                        fontsize=font_size_header, color=black)
+        y_position += 30
+
+        # Draw header line
+        page.draw_line((margin, y_position), (page_width - margin, y_position),
+                      color=black, width=2)
+        y_position += 20
+
+        # Order Information
+        page.insert_text((margin, y_position), "Order Information:",
+                        fontsize=font_size_header, color=black)
+        y_position += 20
+
+        order_info = [
+            f"Customer: {order.customer.name if order.customer else 'N/A'}",
+            f"Email: {order.customer.email if order.customer else 'N/A'}",
+            f"Order Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}",
+            f"Status: {order.status.replace('_', ' ').title()}"
+        ]
+
+        if order.delivery_address:
+            order_info.append(f"Delivery Address: {order.delivery_address}")
+        if order.delivery_date:
+            order_info.append(f"Delivery Date: {order.delivery_date}")
+
+        for info in order_info:
+            page.insert_text((margin + 20, y_position), info,
+                           fontsize=font_size_normal, color=black)
+            y_position += 15
+
+        y_position += 20
+
+        # Order Items Table
+        page.insert_text((margin, y_position), "Order Items:",
+                        fontsize=font_size_header, color=black)
+        y_position += 20
+
+        # Table headers
+        headers = ["Item", "Quantity", "Unit Price", "Total"]
+        col_widths = [200, 80, 80, 80]
+        col_positions = [margin]
+        for width in col_widths[:-1]:
+            col_positions.append(col_positions[-1] + width)
+
+        # Draw table header background
+        header_height = 20
+        page.draw_rect(fitz.Rect(margin, y_position - 5, page_width - margin, y_position + header_height - 5),
+                      color=light_gray, fill=light_gray)
+
+        # Table headers
+        for i, header in enumerate(headers):
+            page.insert_text((col_positions[i] + 5, y_position + 10), header,
+                           fontsize=font_size_normal, color=black)
+
+        y_position += header_height + 5
+
+        # Table rows
+        total_amount = 0
+        for item in line_items:
+            unit_price = float(item.unit_price or 0)
+            quantity = item.requested_quantity
+            total = float(item.total_price or 0)
+            total_amount += total
+
+            row_data = [
+                item.product_name or item.requested_name,
+                str(quantity),
+                f"${unit_price:.2f}",
+                f"${total:.2f}"
+            ]
+
+            # Draw row background (alternating)
+            if line_items.index(item) % 2 == 0:
+                page.draw_rect(fitz.Rect(margin, y_position - 3, page_width - margin, y_position + 12),
+                              color=(0.98, 0.98, 0.98), fill=(0.98, 0.98, 0.98))
+
+            # Row data
+            for i, data in enumerate(row_data):
+                page.insert_text((col_positions[i] + 5, y_position + 8), data,
+                               fontsize=font_size_normal, color=black)
+
+            y_position += 15
+
+        # Total
+        y_position += 10
+        total_text = f"Total Amount: ${total_amount:.2f}"
+        page.insert_text((page_width - margin - 150, y_position), total_text,
+                        fontsize=font_size_header, color=black)
+        y_position += 30
+
+        # Footer - Center manually
+        footer_y = page_height - 60
+        footer_text1 = "Thank you for your business!"
+        footer_width1 = len(footer_text1) * font_size_normal * 0.5  # Rough estimate
+        x_footer1 = (page_width - footer_width1) / 2
+        page.insert_text((x_footer1, footer_y), footer_text1,
+                        fontsize=font_size_normal, color=gray)
+        footer_y += 15
+
+        footer_text2 = "ABC Coffee Company - Quality Coffee Products"
+        footer_width2 = len(footer_text2) * font_size_small * 0.4  # Rough estimate
+        x_footer2 = (page_width - footer_width2) / 2
+        page.insert_text((x_footer2, footer_y), footer_text2,
+                        fontsize=font_size_small, color=gray)
+
+        # Save PDF to bytes
+        pdf_bytes = BytesIO()
+        doc.save(pdf_bytes)
+        doc.close()
+        pdf_bytes.seek(0)
+
+        # Return PDF as response
+        from fastapi.responses import StreamingResponse
+
+        def iter_pdf():
+            yield pdf_bytes.getvalue()
+
+        return StreamingResponse(
+            iter_pdf(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=Sales_Order_{order.id}.pdf"}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+@app.post("/api/orders/{order_id}/generate-response")
+async def generate_ai_response(order_id: int, db: Session = Depends(get_db)):
+    """Generate an AI-powered response for an order"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        # Get recent email conversation for context
+        recent_emails = db.query(EmailLog).filter(EmailLog.order_id == order_id).order_by(EmailLog.received_at.desc()).limit(10).all()
+        recent_emails.reverse()  # Put in chronological order
+
+        # Build conversation context
+        conversation_context = []
+        for email in recent_emails:
+            conversation_context.append({
+                'direction': email.direction,
+                'subject': email.subject,
+                'body': email.body[:500] if email.body else '',  # Limit body length
+                'timestamp': email.received_at.isoformat()
+            })
+
+        # Get order details
+        line_items = db.query(LineItem).filter(LineItem.order_id == order.id).all()
+        order_details = {
+            'id': order.id,
+            'status': order.status,
+            'customer_name': order.customer.name,
+            'customer_email': order.customer.email,
+            'line_items': [{
+                'name': item.product_name or item.requested_name,
+                'quantity': item.requested_quantity,
+                'status': item.status,
+                'unit_price': item.unit_price,
+                'total_price': item.total_price,
+                'issue': item.issue
+            } for item in line_items],
+            'customer_notes': order.customer_notes,
+            'created_at': order.created_at.isoformat()
+        }
+
+        # Use AI to generate intelligent response
+        from core.llm_extractor import generate_response_suggestion
+
+        ai_response = generate_response_suggestion(
+            order_details=order_details,
+            conversation_history=conversation_context,
+            response_type='customer_response'
+        )
+
+        # Generate subject line
+        latest_email = recent_emails[-1] if recent_emails else None
+        if latest_email and latest_email.direction == 'incoming':
+            base_subject = latest_email.subject or "Order Inquiry"
+            subject = f"Re: {base_subject}" if not base_subject.startswith("Re:") else base_subject
+        else:
+            subject = f"Re: Order #{order.id} Update"
+
+        return {
+            'subject': subject,
+            'body': ai_response,
+            'suggested_actions': ['send_response', 'update_status']
+        }
+
+    except Exception as e:
+        print(f"Error generating AI response: {e}")
+        raise HTTPException(status_code=500, detail=f"AI response generation failed: {str(e)}")
+
+@app.post("/api/orders/{order_id}/respond")
+async def send_email_response(
+    order_id: int,
+    request: EmailResponseRequest,
+    db: Session = Depends(get_db)
+):
+    """Send email response for an order with proper threading"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        # Determine subject - add "Re:" prefix if not already present
+        subject = request.subject
+        if not subject:
+            # Get the latest email subject from the chain
+            latest_email = db.query(EmailLog).filter(EmailLog.order_id == order_id).order_by(EmailLog.received_at.desc()).first()
+            base_subject = latest_email.subject if latest_email else "Order Inquiry"
+            subject = f"Re: {base_subject}" if not base_subject.startswith("Re:") else base_subject
+
+        # Send the email response with threading
+        email_manager.send_response_email(
+            order_id=order_id,
+            subject=subject,
+            body=request.response_content,
+            reply_to_message_id=request.reply_to_message_id
+        )
+
+        # Update order status based on current status
+        new_status = 'response' if order.status == 'inquiry' else 'follow_up' if order.status == 'follow_up' else 'response'
+        order.status = new_status
+        order.updated_at = datetime.utcnow()
+        db.commit()
+
+        return {"message": f"Email response sent successfully. Order status updated to {new_status}"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email response: {str(e)}")
+
+def _generate_fallback_response(order: Order, db: Session):
+    """Generate a basic fallback response when AI fails"""
+    line_items = db.query(LineItem).filter(LineItem.order_id == order.id).all()
+
+    validated_items = [item for item in line_items if item.status == 'VALIDATED']
+    issues_items = [item for item in line_items if item.status != 'VALIDATED']
+
+    response = f"Dear {order.customer.name or 'Valued Customer'},\n\n"
+
+    if validated_items:
+        response += "Thank you for your order inquiry. Here are the items we've confirmed:\n\n"
+        for item in validated_items:
+            response += f"• {item.product_name or item.requested_name}: {item.requested_quantity} × ${item.unit_price} = ${item.total_price}\n"
+        response += "\n"
+    else:
+        response += "Thank you for your order inquiry. We're processing your request.\n\n"
+
+    if issues_items:
+        response += "Items needing attention:\n"
+        for item in issues_items:
+            response += f"• {item.requested_name}: {item.issue or 'Under review'}\n"
+        response += "\n"
+
+    response += "Please let us know if you have any questions.\n\nBest regards,\nSales Team"
+
+    return {
+        'subject': f"Re: Order #{order.id} Update",
+        'body': response,
+        'suggested_actions': ['send_response']
+    }
 
 class AddTaskRequest(BaseModel):
     task_type: str
@@ -493,10 +933,10 @@ async def create_rule(rule: RuleCreateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to create rule: {str(e)}")
 
 @app.get("/api/rules", response_model=List[RuleResponse])
-async def get_rules(db: Session = Depends(get_db)):
-    """Get all active rules"""
+async def get_rules(include_inactive: bool = True, db: Session = Depends(get_db)):
+    """Get all rules (active and inactive by default)"""
     rule_engine = RuleEngine(db)
-    rules_data = rule_engine.get_active_rules()
+    rules_data = rule_engine.get_active_rules(include_inactive=include_inactive)
 
     # Convert to RuleResponse format
     rules = []
@@ -517,10 +957,33 @@ async def get_rule(rule_id: int, db: Session = Depends(get_db)):
     return _rule_to_response(rule)
 
 @app.put("/api/rules/{rule_id}", response_model=RuleResponse)
-async def update_rule(rule_id: int, rule_update: RuleCreateRequest, db: Session = Depends(get_db)):
+async def update_rule(rule_id: int, rule_update: RuleUpdateRequest, db: Session = Depends(get_db)):
     """Update an existing rule"""
     rule_engine = RuleEngine(db)
-    success = rule_engine.update_rule(rule_id, rule_update.dict())
+
+    # Get the current rule
+    current_rule = db.query(WorkflowRule).filter(WorkflowRule.id == rule_id).first()
+    if not current_rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    # Build update data - only include fields that were provided
+    update_data = {}
+    if rule_update.name is not None:
+        update_data['name'] = rule_update.name
+    if rule_update.description is not None:
+        update_data['description'] = rule_update.description
+    if rule_update.conditions is not None:
+        update_data['conditions'] = rule_update.conditions
+    if rule_update.actions is not None:
+        update_data['actions'] = rule_update.actions
+    if rule_update.priority is not None:
+        update_data['priority'] = rule_update.priority
+    if rule_update.rule_type is not None:
+        update_data['rule_type'] = rule_update.rule_type
+    if rule_update.is_active is not None:
+        update_data['is_active'] = rule_update.is_active
+
+    success = rule_engine.update_rule(rule_id, update_data)
 
     if not success:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -613,6 +1076,7 @@ def _email_to_response(email: EmailLog) -> EmailLogResponse:
         subject=email.subject,
         sender=email.sender,
         recipient=email.recipient,
+        body=email.body,
         workflow_stage=email.workflow_stage,
         intent_summary=email.intent_summary,
         requires_action=email.requires_action,

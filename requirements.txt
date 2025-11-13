@@ -10,13 +10,13 @@ alembic==1.12.1
 psycopg2-binary==2.9.9  # For PostgreSQL (Railway/Render)
 
 # LLM interaction
-google-generativeai==0.5.4
+google-generativeai==0.8.5
 
 # Email processing
 imap-tools==0.50.0
 
 # Data manipulation and fuzzy matching
-pandas==1.5.3
+pandas==2.1.4
 thefuzz==0.22.1
 python-Levenshtein==0.25.1  # Recommended: Speeds up thefuzz
 
