@@ -1,0 +1,37 @@
+[build]
+builder = "dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[build.args]
+NODE_ENV = "production"
+
+[[services]]
+id = "sales-order-api"
+sourceDir = "."
+
+[services.healthcheck]
+path = "/health"
+
+[services.tcpProxy]
+default = true
+
+[[services.ports]]
+port = 8000
+protocol = "http"
+
+[[services.ports]]
+port = 443
+protocol = "https"
+
+# Environment variables (set these in Railway dashboard)
+# GEMINI_API_KEY - Your Google Gemini API key
+# DATABASE_URL - Will be set automatically by Railway
+# IMAP_SERVER - Your IMAP server (e.g., imap.gmail.com)
+# SMTP_SERVER - Your SMTP server (e.g., smtp.gmail.com)
+# EMAIL_ACCOUNT - Your email address
+# EMAIL_PASSWORD - Your email password/app password

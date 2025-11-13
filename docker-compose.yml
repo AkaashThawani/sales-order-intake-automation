@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  sales-order-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///sales_orders.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+      # Email configuration (optional for local development)
+      - IMAP_SERVER=${IMAP_SERVER:-imap.gmail.com}
+      - SMTP_SERVER=${SMTP_SERVER:-smtp.gmail.com}
+      - EMAIL_ACCOUNT=${EMAIL_ACCOUNT}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      # Security
+      - SECRET_KEY=development-secret-key-change-in-production
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+    volumes:
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./sales_orders.db:/app/sales_orders.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Optional: PostgreSQL database for production-like setup
+  # Uncomment this section if you want to use PostgreSQL locally
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: sales_orders
+  #     POSTGRES_USER: sales_user
+  #     POSTGRES_PASSWORD: sales_password
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U sales_user -d sales_orders"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+# volumes:
+#   postgres_data:

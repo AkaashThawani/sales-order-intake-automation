@@ -1,0 +1,30 @@
+{
+    "sales_order_summary": {
+        "customer_name": "Yuki Tanaka",
+        "delivery_address": "2-11-3 Meguro, Tokyo, Japan",
+        "requested_delivery_date": "June 18, 2025",
+        "notes": null,
+        "generation_timestamp_utc": "2025-06-15T23:22:18.649216"
+    },
+    "line_items": [
+        {
+            "sku": "NST-0249",
+            "product_name": "Nightstand SN\u00d6RFORS 19",
+            "quantity": 1,
+            "unit_price": 511.86,
+            "total_price": 511.86
+        }
+    ],
+    "issues_for_review": [
+        {
+            "requested_item": "Office LUNDMARK 699",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 8 is below the Minimum Order Quantity of 10."
+        },
+        {
+            "requested_item": "Bar M\u00d6RKDAL 443",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 3 is below the Minimum Order Quantity of 5."
+        }
+    ]
+}

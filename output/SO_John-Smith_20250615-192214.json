@@ -1,0 +1,39 @@
+{
+    "sales_order_summary": {
+        "customer_name": "John Smith",
+        "delivery_address": "123 Maple Street, Springfield, IL 62704",
+        "requested_delivery_date": "June 20, 2025",
+        "notes": "Let me know if anything\u2019s out of stock!",
+        "generation_timestamp_utc": "2025-06-15T23:22:14.037678"
+    },
+    "line_items": [
+        {
+            "sku": "CFT-0167",
+            "product_name": "Coffee STR\u00c5DAL 620",
+            "quantity": 9,
+            "unit_price": 676.25,
+            "total_price": 6086.25
+        },
+        {
+            "sku": "LVS-0439",
+            "product_name": "Loveseat HEMNHOLM 512",
+            "quantity": 2,
+            "unit_price": 510.96,
+            "total_price": 1021.92
+        },
+        {
+            "sku": "SFA-0142",
+            "product_name": "Sofa VIKTMARK 446",
+            "quantity": 10,
+            "unit_price": 327.56,
+            "total_price": 3275.6
+        }
+    ],
+    "issues_for_review": [
+        {
+            "requested_item": "Wardrobe LUNDLUND 757",
+            "status": "INSUFFICIENT_STOCK",
+            "details": "Requested quantity 8 exceeds available stock of 3 for 'Wardrobe LUNDLUND 757'."
+        }
+    ]
+}

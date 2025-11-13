@@ -1,0 +1,48 @@
+# Render deployment configuration for Sales Order Automation
+# This creates a web service that connects to a separate PostgreSQL database
+
+services:
+  # Main web service for the API
+  - type: web
+    name: sales-order-api
+    runtime: docker
+    # Uncomment and update these lines when you have your repo ready:
+    # repo: https://github.com/your-github-username/your-repo-name
+    # branch: main
+
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: DATABASE_URL
+        sync: false  # Copy from PostgreSQL service
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PORT
+        value: 8000
+      - key: PYTHONUNBUFFERED
+        value: 1
+      # Email configuration (set these in Render dashboard)
+      - key: IMAP_SERVER
+        value: imap.gmail.com
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: EMAIL_ACCOUNT
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      # Security
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://your-frontend.onrender.com  # Update with your frontend URL
+
+# Note: Create the PostgreSQL database separately in Render dashboard
+# 1. Go to Render dashboard
+# 2. Click "New" → "PostgreSQL"
+# 3. Name it "sales-order-db"
+# 4. Copy the "Internal Database URL" to the DATABASE_URL env var above

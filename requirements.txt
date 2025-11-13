@@ -1,0 +1,37 @@
+# Web Framework (FastAPI replaces Flask)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Database Drivers
+psycopg2-binary==2.9.9  # For PostgreSQL (Railway/Render)
+
+# LLM interaction
+google-generativeai==0.8.5
+
+# Email processing
+imap-tools==0.50.0
+
+# Data manipulation and fuzzy matching
+pandas==2.1.4
+thefuzz==0.22.1
+python-Levenshtein==0.25.1  # Recommended: Speeds up thefuzz
+
+# Environment and configuration
+python-dotenv==1.0.1
+
+# PDF generation
+PyMuPDF==1.24.1
+
+# Background task scheduling
+schedule==1.2.0
+
+# Optional: For future frontend integration
+# python-multipart==0.0.6
+
+# Development and testing
+# pytest==7.4.3
+# pytest-asyncio==0.21.1

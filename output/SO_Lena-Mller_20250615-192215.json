@@ -1,0 +1,25 @@
+{
+    "sales_order_summary": {
+        "customer_name": "Lena M\u00fcller",
+        "delivery_address": "45 K\u00f6nigstra\u00dfe, Stuttgart, Germany",
+        "requested_delivery_date": "July 1, 2025",
+        "notes": null,
+        "generation_timestamp_utc": "2025-06-15T23:22:15.204541"
+    },
+    "line_items": [
+        {
+            "sku": "BDF-0213",
+            "product_name": "Bed TR\u00c4NBERG 858",
+            "quantity": 2,
+            "unit_price": 337.61,
+            "total_price": 675.22
+        }
+    ],
+    "issues_for_review": [
+        {
+            "requested_item": "Dining FJ\u00c4RDAL 292",
+            "status": "MOQ_NOT_MET",
+            "details": "Quantity 5 is below the Minimum Order Quantity of 10."
+        }
+    ]
+}
