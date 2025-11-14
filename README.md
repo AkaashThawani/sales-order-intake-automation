@@ -1,5 +1,10 @@
 # Sales Order Intake Automation
 
+## Links
+- **Frontend Repository**: [https://github.com/AkaashThawani/sales-order-ui](https://github.com/AkaashThawani/sales-order-ui)
+- **Backend Repository**: [https://github.com/AkaashThawani/sales-order-intake-automation](https://github.com/AkaashThawani/sales-order-intake-automation)
+- **My GitHub**: [https://github.com/AkaashThawani](https://github.com/AkaashThawani)
+
 ## Description
 
 This AI-powered Python application provides a complete backend system for automating sales order processing from emails. It features:
